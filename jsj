@@ -1,0 +1,866 @@
+package com.example.businessauthservice.config;
+
+
+import com.example.businessauthservice.filter.JwtAuthFilter;
+import com.example.businessauthservice.repository.BusinnessUserRepository;
+import com.example.businessauthservice.service.BusinesssUserDetailsSerivice;
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+@SuppressWarnings("removal")
+@Configuration
+@RequiredArgsConstructor
+@EnableMethodSecurity(prePostEnabled = true)
+public class SecurityConfig {
+
+    private final JwtAuthFilter jwtAuthFilter;
+    private final BusinnessUserRepository businnessUserRepository;
+
+    @Bean
+    public UserDetailsService userDetailsService(BusinnessUserRepository businnessUserRepository) {
+        return new BusinesssUserDetailsSerivice(businnessUserRepository);
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
+        return http
+                .csrf().disable()
+                .headers(headers -> headers.frameOptions().disable())
+                .authorizeHttpRequests()
+                .requestMatchers(
+                        "/api/auth/**",
+                        "/h2-console/**",
+                        "/swagger-ui/**",
+                        "/swagger-ui.html",
+                        "/v3/api-docs/**",
+                        "/v3/api-docs.yaml",
+                        "/swagger-resources/**",
+                        "/webjars/**"
+                ).permitAll()
+                .requestMatchers("/api/business/**").hasAnyRole("BUSINESS_OWNER")
+                .anyRequest().authenticated()
+                .and()
+                .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                .and()
+                .authenticationProvider(authenticationProvider())
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .build();
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public AuthenticationProvider authenticationProvider() {
+        DaoAuthenticationProvider authenticationProvider = new DaoAuthenticationProvider();
+        authenticationProvider.setUserDetailsService(userDetailsService(businnessUserRepository));
+        authenticationProvider.setPasswordEncoder(passwordEncoder());
+        return authenticationProvider;
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+        return config.getAuthenticationManager();
+    }
+
+
+    @Bean
+    public WebSecurityCustomizer webSecurityCustomizer() {
+        return web -> web.ignoring().requestMatchers("/h2-console/**");
+    }
+}
+
+package com.example.businessauthservice.config;
+
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Contact;
+import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.info.License;
+import io.swagger.v3.oas.models.security.SecurityScheme;
+import io.swagger.v3.oas.models.Components;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class SwaggerConfig {
+
+    @Bean
+    public OpenAPI customOpenAPI() {
+        return new OpenAPI()
+                .info(new Info()
+                        .title("AuthService API")
+                        .version("1.0.0")
+                        .description("Authentication and User Management Service API Documentation")
+                        .termsOfService("http://swagger.io/terms/")
+                        .contact(new Contact().name("Your Name").email("your.email@example.com"))
+                        .license(new License().name("Apache 2.0").url("http://springdoc.org")))
+                .addSecurityItem(new SecurityRequirement().addList("bearerAuth")) // JWT üçün tələb əlavə edir
+                .components(new Components()
+                        .addSecuritySchemes("bearerAuth", new SecurityScheme() // JWT üçün security scheme təyin edir
+                                .type(SecurityScheme.Type.HTTP)
+                                .scheme("bearer")
+                                .bearerFormat("JWT")));
+    }
+}
+// UserAlreadyExistsException.java
+package com.example.businessauthservice.exception;
+
+public class UserAlreadyExistsException extends RuntimeException {
+    public UserAlreadyExistsException(String message) {
+        super(message);
+    }
+}
+
+// OtpException.java
+package com.example.businessauthservice.exception;
+
+public class OtpException extends RuntimeException {
+    public OtpException(String message) {
+        super(message);
+    }
+}
+
+// InvalidTokenException.java
+package com.example.businessauthservice.exception;
+
+public class InvalidTokenException extends RuntimeException {
+    public InvalidTokenException(String message) {
+        super(message);
+    }
+}
+
+// ResourceNotFoundException.java (Ümumi tapılmadı xətası)
+package com.example.businessauthservice.exception;
+
+public class ResourceNotFoundException extends RuntimeException {
+    public ResourceNotFoundException(String message) {
+        super(message);
+    }
+}
+package com.example.businessauthservice.filter;
+
+import com.example.businessauthservice.service.BusinesssUserDetailsSerivice;
+import com.example.businessauthservice.service.JwtService;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+
+@Component
+@RequiredArgsConstructor
+public class JwtAuthFilter extends OncePerRequestFilter {
+
+    private final JwtService jwtService;
+    private final BusinesssUserDetailsSerivice businesssUserDetailsSerivice;
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain filterChain) throws ServletException, IOException {
+
+        final String authHeader = request.getHeader("Authorization");
+        final String token;
+        final String username;
+
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        token = authHeader.substring(7);
+        username = jwtService.extractUsername(token);
+
+        if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            UserDetails userDetails = businesssUserDetailsSerivice.loadUserByUsername(username);
+
+            if (jwtService.validateToken(token, userDetails)) {
+                UsernamePasswordAuthenticationToken authToken =
+                        new UsernamePasswordAuthenticationToken(
+                                userDetails,
+                                null,
+                                userDetails.getAuthorities()
+                        );
+                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                SecurityContextHolder.getContext().setAuthentication(authToken);
+            }
+        }
+
+        filterChain.doFilter(request, response);
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
+        String path = request.getRequestURI();
+        return path.startsWith("/api/auth") || path.startsWith("/h2-console");
+    }
+}
+
+package com.example.businessauthservice.model.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class AuthResponse {
+    private String accessToken;
+    private String refreshToken;
+    private String username;
+    private String email;
+    private String role;
+    private Boolean isAccountEnabled;
+}
+package com.example.businessauthservice.model.dto;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import lombok.Data;
+
+@Data
+public class Login {
+
+    @NotBlank(message = "Identifier (username or email) cannot be blank")
+    private String identifier;
+
+    @NotBlank(message = "Password cannot be blank")
+    @Pattern(
+            regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!@#$%^&*()_+])[A-Za-z\\d!@#$%^&*()_+]{8,}$",
+            message = "Password must be at least 8 characters long and contain an uppercase letter, a lowercase letter, a digit, and a special character (!@#$%^&*()_+).")
+    private String password;
+
+    private Boolean rememberMe = false;
+
+
+}
+package com.example.businessauthservice.model.entity;
+
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.Instant;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@Entity
+@Table(name = "otps") // Artıq uniqueConstraints yoxdur
+public class Otp {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    // identifier unik olmasın, çünki bir user üçün bir neçə fərqli növ OTP ola bilər.
+    // @Column(nullable = false, unique = true) // Bu sətri silin!
+    @Column(nullable = false) // identifier artıq unique deyil
+    private String identifier; // Email və ya Username (hansı ilə OTP göndərilibsə)
+
+    @Column(nullable = false)
+    private String otpCode;
+
+    @Column(nullable = false)
+    private Instant expiryDate;
+
+    @Column(nullable = false)
+    private String otpType; // Məsələn: "ACCOUNT_CONFIRMATION", "PASSWORD_RESET"
+
+    @Builder.Default
+    @Column(nullable = false)
+    private boolean used = false; // OTP istifadə edilibmi?
+}
+package com.example.businessauthservice.model.dto;
+
+import jakarta.validation.constraints.NotBlank;
+import lombok.Data;
+
+@Data
+public class OtpVerificationRequest {
+
+    @NotBlank(message = "Identifier (username or email) cannot be blank")
+    private String identifier;
+    @NotBlank(message = "OTP code cannot be blank")
+    private String otpCode;
+    @NotBlank(message = "OTP type cannot be blank")
+    private String otpType;
+}
+package com.example.businessauthservice.model.dto;
+
+import lombok.Data;
+
+@Data
+public class RefreshTokenRequest {
+
+    private String token;
+}
+package com.example.businessauthservice.model.dto;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import lombok.Data;
+
+@Data
+public class ResetPasswordRequest {
+
+    @NotBlank(message = "Identifier (username or email) cannot be blank")
+    private String identifier;
+
+    @NotBlank(message = "Password cannot be blank")
+    @Pattern(
+            regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!@#$%^&*()_+])[A-Za-z\\d!@#$%^&*()_+]{8,}$",
+            message = "Password must be at least 8 characters long and contain an uppercase letter, a lowercase letter, a digit, and a special character (!@#$%^&*()_+)."
+    )
+    private String newPassword;
+
+}
+package com.example.businessauthservice.model.dto;
+
+import com.example.businessauthservice.model.enumeration.Roles;
+import jakarta.validation.constraints.*;
+import lombok.Data;
+
+@Data
+
+public class Signup {
+
+    @NotBlank(message = "Username cannot be blank")
+    @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
+    private String userName;
+
+    @NotBlank(message = "Email cannot be blank")
+    @Email(message = "Email must be a valid email address")
+    private String email;
+
+    @NotBlank(message = "Password cannot be blank")
+    @Pattern(
+            regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!@#$%^&*()_+])[A-Za-z\\d!@#$%^&*()_+]{8,}$",
+            message = "Password must be at least 8 characters long and contain an uppercase letter, a lowercase letter, a digit, and a special character (!@#$%^&*()_+)."
+    )
+    private String password;
+
+
+}
+package com.example.businessauthservice.model.entity;
+
+import com.example.businessauthservice.model.enumeration.Roles;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@Entity
+@Table(name = "users")
+public class BusinessUser{
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false, length = 50,unique = true)
+    private String userName;
+
+    @Column(unique = true, length = 100)
+    private String email;
+
+    @Column(nullable = false, length = 120)
+    private String password;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private Roles roles;
+
+    @Builder.Default
+    @Column(nullable = false)
+    private boolean enabled = false;
+
+}
+package com.example.businessauthservice.model.entity;
+
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.Instant;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@Entity
+@Table(name = "otps")
+public class Otp {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false, unique = true)
+    private String identifier; // Email və ya Username (hansı ilə OTP göndərilibsə)
+
+    @Column(nullable = false)
+    private String otpCode;
+
+    @Column(nullable = false)
+    private Instant expiryDate;
+
+    @Column(nullable = false)
+    private String otpType; // Məsələn: "ACCOUNT_CONFIRMATION", "PASSWORD_RESET"
+
+    @Builder.Default
+    @Column(nullable = false)
+    private boolean used = false; // OTP istifadə edilibmi?
+}
+package com.example.businessauthservice.model.entity;
+
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.Instant;
+
+@Entity
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
+public class RefreshToken {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private int id;
+
+    private String token;
+
+    private Instant expiryDate;
+
+    @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)
+    @JoinColumn(name = "user_id", referencedColumnName = "id")
+    private BusinessUser user;
+}
+package com.example.businessauthservice.model.enumeration;
+
+public enum Roles {
+    USER,
+    BUSINESS_OWNER
+}
+package com.example.businessauthservice.repository;
+
+import com.example.businessauthservice.model.entity.BusinessUser;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.Optional;
+
+@Repository
+public interface BusinnessUserRepository extends JpaRepository<BusinessUser,Long> {
+
+    Optional<BusinessUser> findByUserName(String userName);
+    Optional<BusinessUser> findByEmail(String email);
+
+}
+package com.example.businessauthservice.repository;
+
+import com.example.businessauthservice.model.entity.Otp;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.time.Instant;
+import java.util.Optional;
+
+@Repository
+public interface OtpRepository extends JpaRepository<Otp, Long> {
+
+    Optional<Otp> findByIdentifierAndOtpTypeAndUsedFalseAndExpiryDateAfter(String identifier, String otpType, Instant now);
+
+    Optional<Otp> findByIdentifierAndOtpType(String identifier, String otpType);
+}
+package com.example.businessauthservice.repository;
+
+import com.example.businessauthservice.model.entity.BusinessUser;
+import com.example.businessauthservice.model.entity.RefreshToken;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
+
+@Repository
+public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Integer> {
+    Optional<RefreshToken> findByToken(String token);
+
+    void deleteByUser(BusinessUser user);
+}
+package com.example.businessauthservice.service;
+
+import com.example.businessauthservice.repository.BusinnessUserRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.stereotype.Service;
+
+import java.util.Collections;
+
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class BusinesssUserDetailsSerivice implements UserDetailsService {
+
+    private final BusinnessUserRepository businnessUserRepository;
+
+    @Override
+    public UserDetails loadUserByUsername(String identifier) throws UsernameNotFoundException {
+        log.debug("Attempting to load user by identifier: {}", identifier);
+
+        // 1. Username ilə axtarış
+        var userOptByUserName = businnessUserRepository.findByUserName(identifier);
+        if (userOptByUserName.isPresent()) {
+            var user = userOptByUserName.get();
+            log.info("User found by username: {}", user.getUserName());
+            // UserDetails obyektini istifadəçinin username, password və rolu ilə qaytarır
+            return new org.springframework.security.core.userdetails.User(
+                    user.getUserName(),
+                    user.getPassword(),
+                    Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + user.getRoles().name()))
+            );
+        }
+
+        // 2. Email ilə axtarış (əgər username ilə tapılmayıbsa)
+        var userOptByEmail = businnessUserRepository.findByEmail(identifier);
+        if (userOptByEmail.isPresent()) {
+            var user = userOptByEmail.get();
+            log.info("User found by email: {}", user.getEmail());
+            // Burada da UserDetails obyektini istifadəçinin username, password və rolu ilə qaytarır
+            // Qeyd: loadUserByUsername metodu UserDetails obyektinin username-ini istifadə edir
+            // buna görə də, email ilə tapılan istifadəçi üçün də user.getUserName() qaytarmaq düzgündür
+            return new org.springframework.security.core.userdetails.User(
+                    user.getUserName(),
+                    user.getPassword(),
+                    Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + user.getRoles().name()))
+            );
+        }
+
+        log.warn("User not found with identifier: {}", identifier);
+        throw new UsernameNotFoundException("User not found with identifier: " + identifier);
+    }
+}
+package com.example.businessauthservice.service;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+
+import jakarta.mail.MessagingException;
+import jakarta.mail.internet.MimeMessage;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class EmailService {
+
+    private final JavaMailSender mailSender;
+
+    @Async("taskExecutor") // `AsyncConfig`də təyin olunmuş `taskExecutor` bean-ini istifadə edir
+    public void sendEmail(String to, String subject, String body) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8"); // true for multipart, UTF-8 for encoding
+            helper.setTo(to);
+            helper.setSubject(subject);
+            helper.setText(body, true); // true for HTML content
+            mailSender.send(message);
+            log.info("Email sent successfully to: {}", to);
+        } catch (MessagingException e) {
+            log.error("Failed to send email to {}: {}", to, e.getMessage());
+            // Real tətbiqlərdə bu xətanı istifadəçiyə qaytarmaq və ya Retry mexanizmi tətbiq etmək olar.
+            throw new RuntimeException("Email göndərilərkən xəta baş verdi: " + e.getMessage());
+        }
+    }
+}
+package com.example.businessauthservice.service;
+
+import com.example.businessauthservice.model.enumeration.Roles;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.io.Decoders;
+import io.jsonwebtoken.security.Keys;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.stereotype.Component;
+
+import java.security.Key;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Function;
+
+@Component
+public class JwtService {
+
+    public static final String SECRET = "5367566B59703373367639792F423F4528482B4D6251655468576D5A71347437";
+
+    public String extractUsername(String token) {
+        return extractClaim(token, Claims::getSubject);
+    }
+
+    public Date extractExpiration(String token) {
+        return extractClaim(token, Claims::getExpiration);
+    }
+
+    public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
+        final Claims claims = extractAllClaims(token);
+        return claimsResolver.apply(claims);
+    }
+
+    private Claims extractAllClaims(String token) {
+        return Jwts
+                .parserBuilder()
+                .setSigningKey(getSignKey())
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+    }
+
+    private Boolean isTokenExpired(String token) {
+        return extractExpiration(token).before(new Date());
+    }
+
+    public Boolean validateToken(String token, UserDetails userDetails) {
+        final String username = extractUsername(token);
+        return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
+    }
+
+    public String generateToken(String userName, Roles role) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("role", role.name()); // Rolu "role" adlı bir claim olaraq tokenə əlavə edin
+        return createToken(claims, userName);
+    }
+
+    private String createToken(Map<String, Object> claims, String userName) {
+        return Jwts.builder()
+                .setClaims(claims)
+                .setSubject(userName)
+                .setIssuedAt(new Date(System.currentTimeMillis()))
+                // Access token üçün 1 gün müddət
+                .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 60 * 24)) // 1 gün
+                .signWith(getSignKey(), SignatureAlgorithm.HS256).compact();
+    }
+
+    private Key getSignKey() {
+        byte[] keyBytes = Decoders.BASE64.decode(SECRET);
+        return Keys.hmacShaKeyFor(keyBytes);
+    }
+}
+package com.example.businessauthservice.service;
+
+import com.example.businessauthservice.model.entity.BusinessUser;
+import com.example.businessauthservice.model.entity.RefreshToken;
+import com.example.businessauthservice.repository.BusinnessUserRepository;
+import com.example.businessauthservice.repository.RefreshTokenRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.time.Instant;
+import java.util.Optional;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+public class RefreshTokenService {
+
+    private final RefreshTokenRepository refreshTokenRepository;
+    private final BusinnessUserRepository businnessUserRepository;
+
+    public RefreshToken createRefreshToken(String username) {
+        RefreshToken refreshToken = RefreshToken.builder()
+                .user(businnessUserRepository.findByUserName(username).get())
+                .token(UUID.randomUUID().toString())
+                .expiryDate(Instant.now().plusSeconds(60 * 60 * 24 )) // 7 gün
+                .build();
+        return refreshTokenRepository.save(refreshToken);
+    }
+
+    public Optional<RefreshToken> findByToken(String token) {
+        return refreshTokenRepository.findByToken(token);
+    }
+
+    public RefreshToken verifyExpiration(RefreshToken token) {
+        if (token.getExpiryDate().compareTo(Instant.now()) < 0) {
+            refreshTokenRepository.delete(token);
+            throw new RuntimeException(token.getToken() + " Refresh token was expired. Please make a new signin request");
+        }
+        return token;
+    }
+
+    // RefreshTokenRepository-də bu metodu əlavə etmək daha səmərəlidir
+    // void deleteByUser(BusinessUser user);
+    public void deleteByUserId(Long userId) {
+        BusinessUser user = businnessUserRepository.findById(userId).orElseThrow(
+                () -> new RuntimeException("User not found for deletion of refresh tokens"));
+        refreshTokenRepository.deleteByUser(user);
+    }
+}
+package com.example.businessauthservice.exception;
+
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
+
+@RestControllerAdvice
+@Slf4j
+public class GlobalExceptionHandler {
+
+    // Custom Exception Handling
+    @ExceptionHandler(UserAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handleUserAlreadyExistsException(UserAlreadyExistsException ex) {
+        log.error("UserAlreadyExistsException: {}", ex.getMessage());
+        ErrorResponse errorResponse = new ErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                ex.getMessage(),
+                LocalDateTime.now()
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(OtpException.class)
+    public ResponseEntity<ErrorResponse> handleOtpException(OtpException ex) {
+        log.error("OtpException: {}", ex.getMessage());
+        ErrorResponse errorResponse = new ErrorResponse(
+                HttpStatus.BAD_REQUEST.value(), // 400 Bad Request
+                ex.getMessage(),
+                LocalDateTime.now()
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleResourceNotFoundException(ResourceNotFoundException ex) {
+        log.error("ResourceNotFoundException: {}", ex.getMessage());
+        ErrorResponse errorResponse = new ErrorResponse(
+                HttpStatus.NOT_FOUND.value(), // 404 Not Found
+                ex.getMessage(),
+                LocalDateTime.now()
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(InvalidTokenException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidTokenException(InvalidTokenException ex) {
+        log.error("InvalidTokenException: {}", ex.getMessage());
+        ErrorResponse errorResponse = new ErrorResponse(
+                HttpStatus.UNAUTHORIZED.value(), // 401 Unauthorized
+                ex.getMessage(),
+                LocalDateTime.now()
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.UNAUTHORIZED);
+    }
+
+    // Spring Security BadCredentialsException (Login zamanı səhv şifrə/username)
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<ErrorResponse> handleBadCredentialsException(BadCredentialsException ex) {
+        log.error("BadCredentialsException: {}", ex.getMessage());
+        ErrorResponse errorResponse = new ErrorResponse(
+                HttpStatus.UNAUTHORIZED.value(), // 401 Unauthorized
+                "Invalid username/email or password.", // Daha ümumi mesaj verin
+                LocalDateTime.now()
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.UNAUTHORIZED);
+    }
+
+    // Bean Validation (jakarta.validation) xətalarını idarə etmək üçün
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<Map<String, String>> handleValidationExceptions(MethodArgumentNotValidException ex) {
+        log.error("Validation failed: {}", ex.getMessage());
+        Map<String, String> errors = new HashMap<>();
+        ex.getBindingResult().getFieldErrors().forEach(error ->
+                errors.put(error.getField(), error.getDefaultMessage()));
+        return new ResponseEntity<>(errors, HttpStatus.BAD_REQUEST);
+    }
+
+    // Ümumi Xəta İdarəetməsi (Hər hansı digər gözlənilməz xətalar üçün)
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorResponse> handleGlobalException(Exception ex) {
+        log.error("An unexpected error occurred: {}", ex.getMessage(), ex); // Xətanın stack trace-ni loqa yazın
+        ErrorResponse errorResponse = new ErrorResponse(
+                HttpStatus.INTERNAL_SERVER_ERROR.value(), // 500 Internal Server Error
+                "An unexpected error occurred. Please try again later.",
+                LocalDateTime.now()
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+}
+package com.example.businessauthservice.exception;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class ErrorResponse {
+    private int status;
+    private String message;
+    private LocalDateTime timestamp;
+}

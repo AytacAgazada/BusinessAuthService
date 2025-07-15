@@ -1,0 +1,74 @@
+spring:
+  application:
+    name: BusinessAuthService
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  datasource:
+    url: jdbc:postgresql://localhost:5432/postgres
+    username: postgres
+    password: 16032005
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username:  aytacagazadehvidadi@gmail.com
+    password: xudr bdqb uwrt zhxd
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+  task:
+    execution:
+      thread-name-prefix: async-task-
+      pool:
+        core-size: 2
+        max-size: 5
+        queue-capacity: 10
+
+# JWT Access Token Settings
+jwt:
+  secret: q0+DTRJNAJzq8FXZHweVp8RUAEDCrEFwn7IuVyb8If70sZzmmTlRs+UE/zeq3kJzMRIrkVXtRuC14vXNAr8xfQ==
+  expiration:
+    ms: 300000 # 5 d?qiq? (milisaniy?)
+
+  # Refresh Token Settings
+  refresh-expiration:
+    ms: 604800000 # 7 g�n (milisaniy?)
+
+# OTP Settings
+otp:
+  expiration-seconds: 180 # 3 d?qiq?
+
+
+logging:
+  level:
+    com.example.businessauthService: DEBUG # �z paketiniz ���n DEBUG loglar?
+    org.springframework.security: INFO # Spring Security loglar?
+    org.hibernate.SQL: DEBUG # SQL sorgular?n? g�st?rm?k ���n
+    org.hibernate.orm.jdbc.bind: TRACE # SQL parameterl?rini g�st?rm?k ���n
+
+# SpringDoc OpenAPI (Swagger UI) Konfiqurasiyas?
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    disable-swagger-default-url: true
+  api-docs:
+    path: /v3/api-docs
+
+server:
+  port: 9191
