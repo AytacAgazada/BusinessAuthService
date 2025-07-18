@@ -24,7 +24,7 @@ public class Signup {
     private String password;
 
     @NotBlank(message = "Role cannot be blank")
-    @Pattern(regexp = "USER|BUSINESS_OWNER", message = "Invalid role selected. Must be USER or BUSINESS_OWNER.")
+    @Pattern(regexp = "CUSTOMER|BUSINESS_OWNER", message = "Invalid role selected. Must be CUSTOMER or BUSINESS_OWNER.")
     private String selectedRole;
 
 }

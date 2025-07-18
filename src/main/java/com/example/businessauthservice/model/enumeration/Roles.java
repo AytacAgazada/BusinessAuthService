@@ -1,6 +1,6 @@
 package com.example.businessauthservice.model.enumeration;
 
 public enum Roles {
-    USER,
+    CUSTOMER,
     BUSINESS_OWNER
 }
