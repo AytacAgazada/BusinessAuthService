@@ -1,5 +1,6 @@
 package com.example.businessauthservice.controller;
 
+import com.example.businessauthservice.exception.ResourceNotFoundException;
 import com.example.businessauthservice.model.dto.*;
 import com.example.businessauthservice.repository.BusinnessUserRepository;
 import com.example.businessauthservice.service.BusinessAuthService;
@@ -105,5 +106,16 @@ public class BusinessAuthController {
         // businnessUserRepository-dən istifadə edərək bu ID-nin mövcudluğunu yoxlayırıq.
         boolean exists = businnessUserRepository.existsById(authUserId);
         return ResponseEntity.ok(exists);
+    }
+
+    @GetMapping("/{authUserId}/role")
+    public ResponseEntity<String> getUserRole(@PathVariable Long authUserId) {
+        log.info("Request to get role for authUserId: {}", authUserId);
+        return businnessUserRepository.findById(authUserId)
+                .map(authUser -> ResponseEntity.ok(authUser.getRoles().name()))
+                .orElseThrow(() -> {
+                    log.warn("Auth User with ID {} not found when checking role.", authUserId);
+                    return new ResourceNotFoundException("Auth User with ID " + authUserId + " not found.");
+                });
     }
 }
