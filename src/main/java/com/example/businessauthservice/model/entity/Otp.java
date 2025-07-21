@@ -21,7 +21,6 @@ public class Otp {
     private Long id;
 
     // identifier unik olmasın, çünki bir user üçün bir neçə fərqli növ OTP ola bilər.
-    // @Column(nullable = false, unique = true) // Bu sətri silin!
     @Column(nullable = false) // identifier artıq unique deyil
     private String identifier; // Email və ya Username (hansı ilə OTP göndərilibsə)
 
