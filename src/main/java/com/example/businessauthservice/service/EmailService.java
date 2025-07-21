@@ -17,7 +17,7 @@ public class EmailService {
 
     private final JavaMailSender mailSender;
 
-    @Async("taskExecutor") // `AsyncConfig`də təyin olunmuş `taskExecutor` bean-ini istifadə edir
+    @Async("taskExecutor")
     public void sendEmail(String to, String subject, String body) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
@@ -29,7 +29,6 @@ public class EmailService {
             log.info("Email sent successfully to: {}", to);
         } catch (MessagingException e) {
             log.error("Failed to send email to {}: {}", to, e.getMessage());
-            // Real tətbiqlərdə bu xətanı istifadəçiyə qaytarmaq və ya Retry mexanizmi tətbiq etmək olar.
             throw new RuntimeException("Email göndərilərkən xəta baş verdi: " + e.getMessage());
         }
     }
