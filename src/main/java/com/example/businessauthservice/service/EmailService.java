@@ -29,7 +29,7 @@ public class EmailService {
             log.info("Email sent successfully to: {}", to);
         } catch (MessagingException e) {
             log.error("Failed to send email to {}: {}", to, e.getMessage());
-            throw new RuntimeException("Email göndərilərkən xəta baş verdi: " + e.getMessage());
+            throw new RuntimeException("An error occurred while sending the email: " + e.getMessage());
         }
     }
 }
