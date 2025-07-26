@@ -15,7 +15,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("api/auth")
 @RequiredArgsConstructor
 @Slf4j
 @Validated // MethodArgumentNotValidException GlobalExceptionHandler tərəfindən tutulacaq

@@ -23,8 +23,8 @@ spring:
   mail:
     host: smtp.gmail.com
     port: 587
-    username:  aytacagazadehvidadi@gmail.com
-    password: xudr bdqb uwrt zhxd
+    username:  ************
+    password: *********
     properties:
       mail:
         smtp:
@@ -42,25 +42,25 @@ spring:
 
 # JWT Access Token Settings
 jwt:
-  secret: q0+DTRJNAJzq8FXZHweVp8RUAEDCrEFwn7IuVyb8If70sZzmmTlRs+UE/zeq3kJzMRIrkVXtRuC14vXNAr8xfQ==
+  secret: ********************
   expiration:
-    ms: 300000 # 5 d?qiq? (milisaniy?)
+    ms: 300000
 
   # Refresh Token Settings
   refresh-expiration:
-    ms: 604800000 # 7 g�n (milisaniy?)
+    ms: 604800000
 
 # OTP Settings
 otp:
-  expiration-seconds: 180 # 3 d?qiq?
+  expiration-seconds: 180
 
 
 logging:
   level:
-    com.example.businessauthService: DEBUG # �z paketiniz ���n DEBUG loglar?
-    org.springframework.security: INFO # Spring Security loglar?
-    org.hibernate.SQL: DEBUG # SQL sorgular?n? g�st?rm?k ���n
-    org.hibernate.orm.jdbc.bind: TRACE # SQL parameterl?rini g�st?rm?k ���n
+    com.example.businessauthService: DEBUG
+    org.springframework.security: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE
 
 # SpringDoc OpenAPI (Swagger UI) Konfiqurasiyas?
 springdoc:
