@@ -23,8 +23,8 @@ spring:
   mail:
     host: smtp.gmail.com
     port: 587
-    username:  ************
-    password: *********
+    username: aytacagazadehvidadi@gmail.com
+    password: xudr bdqb uwrt zhxd
     properties:
       mail:
         smtp:
@@ -42,7 +42,7 @@ spring:
 
 # JWT Access Token Settings
 jwt:
-  secret: ********************
+  secret: q0+DTRJNAJzq8FXZHweVp8RUAEDCrEFwn7IuVyb8If70sZzmmTlRs+UE/zeq3kJzMRIrkVXtRuC14vXNAr8xfQ==
   expiration:
     ms: 300000
 
