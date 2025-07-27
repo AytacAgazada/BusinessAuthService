@@ -310,51 +310,6 @@ public class BusinessAuthService {
                 .build();
     }
 
-
-    // --- User Management (Optional: if needed in Auth Service) ---
-    @Transactional
-    public BusinessUser updateUserDetails(Long id, BusinessUser updatedUser) {
-        log.info("Attempting to update user details for ID: {}", id);
-        return businnessUserRepository.findById(id).map(existingUser -> {
-
-            // Email və Username unikallığını yoxlayın
-            if (!existingUser.getEmail().equals(updatedUser.getEmail())) {
-                businnessUserRepository.findByEmail(updatedUser.getEmail())
-                        .ifPresent(user -> {
-                            log.warn("Update failed: Email '{}' already in use by another user for ID: {}.", updatedUser.getEmail(), id);
-                            throw new UserAlreadyExistsException("Email '" + updatedUser.getEmail() + "' already in use by another user.");
-                        });
-                existingUser.setEmail(updatedUser.getEmail());
-            }
-
-            if (!existingUser.getUserName().equals(updatedUser.getUserName())) {
-                businnessUserRepository.findByUserName(updatedUser.getUserName())
-                        .ifPresent(user -> {
-                            log.warn("Update failed: Username '{}' already in use by another user for ID: {}.", updatedUser.getUserName(), id);
-                            throw new UserAlreadyExistsException("Username '" + updatedUser.getUserName() + "' already in use by another user.");
-                        });
-                existingUser.setUserName(updatedUser.getUserName());
-            }
-
-            if (updatedUser.getRoles() != null) {
-                existingUser.setRoles(updatedUser.getRoles());
-            }
-            if (updatedUser.getPassword() != null && !updatedUser.getPassword().isBlank()) {
-                existingUser.setPassword(passwordEncoder.encode(updatedUser.getPassword()));
-                log.info("Password updated for user ID: {}", id);
-            }
-            existingUser.setEnabled(updatedUser.isEnabled());
-
-
-            businnessUserRepository.save(existingUser);
-            log.info("User details updated successfully for ID: {}", id);
-            return existingUser;
-        }).orElseThrow(() -> {
-            log.warn("User update failed: User not found with ID: {}", id);
-            return new ResourceNotFoundException("User not found with ID: " + id);
-        });
-    }
-
     @Transactional
     public void deleteUser(Long id) {
         log.info("Attempting to delete user with ID: {}", id);
