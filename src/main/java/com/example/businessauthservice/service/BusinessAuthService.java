@@ -124,7 +124,7 @@ public class BusinessAuthService {
                     .email(user.getEmail())
                     .role(user.getRoles().name())
                     .isAccountEnabled(user.isEnabled())
-                    .message("Login successful.") // Düzəliş edildi
+                    .message("Login successful.")
                     .build();
         } catch (UsernameNotFoundException | BadCredentialsException e) {
             log.error("Authentication failed for identifier {}: {}", loginRequest.getIdentifier(), e.getMessage());
@@ -160,7 +160,7 @@ public class BusinessAuthService {
                 .email(user.getEmail())
                 .role(user.getRoles().name())
                 .isAccountEnabled(user.isEnabled())
-                .message("Access token refreshed successfully.") // Düzəliş edildi
+                .message("Access token refreshed successfully.")
                 .build();
     }
 
@@ -182,16 +182,16 @@ public class BusinessAuthService {
         // Həmin identifier və OTP növü üçün aktiv, istifadə olunmamış OTP-ləri deaktiv edin
         otpRepository.findByIdentifierAndOtpTypeAndUsedFalseAndExpiryDateAfter(user.getEmail(), request.getOtpType(), Instant.now())
                 .ifPresent(activeOtp -> {
-                    activeOtp.setUsed(true); // Köhnə OTP-ni istifadə edilmiş kimi qeyd edin
+                    activeOtp.setUsed(true); // Köhnə OTP-ni istifadə edilmiş kimi qeyd edir
                     otpRepository.save(activeOtp);
                     log.info("Deactivated previous active OTP for identifier: {} and type: {}", request.getIdentifier(), request.getOtpType());
                 });
 
-        String otpCode = generateRandomOtp(); // OTP kodu yaradın (məsələn, 6 rəqəmli)
-        Instant expiryTime = Instant.now().plus(5, ChronoUnit.MINUTES); // 5 dəqiqə etibarlılıq müddəti
+        String otpCode = generateRandomOtp();
+        Instant expiryTime = Instant.now().plus(5, ChronoUnit.MINUTES); // 5 dq etibarlı
 
         Otp otp = Otp.builder()
-                .identifier(user.getEmail()) // Emaili istifadə edin
+                .identifier(user.getEmail())
                 .otpCode(otpCode)
                 .expiryDate(expiryTime)
                 .otpType(request.getOtpType())
@@ -200,13 +200,12 @@ public class BusinessAuthService {
         otpRepository.save(otp);
         log.info("Generated new OTP for identifier: {} and type: {}", request.getIdentifier(), request.getOtpType());
 
-        // Email göndərin
         String subject = "Your OTP for " + request.getOtpType().replace("_", " ").toLowerCase();
         String body = "Hello " + user.getUserName() + ",<br><br>"
                 + "Your One-Time Password (OTP) for " + request.getOtpType().replace("_", " ").toLowerCase() + " is: <b>" + otpCode + "</b><br>"
                 + "This OTP is valid for 5 minutes. Please do not share this code with anyone.<br><br>"
                 + "Thank you.";
-        emailService.sendEmail(user.getEmail(), subject, body); // Userin emailinə göndərin
+        emailService.sendEmail(user.getEmail(), subject, body);
         log.info("OTP email sent to: {}", user.getEmail());
 
         return AuthResponse.builder()
@@ -214,7 +213,7 @@ public class BusinessAuthService {
                 .email(user.getEmail())
                 .role(user.getRoles().name())
                 .isAccountEnabled(user.isEnabled())
-                .message("OTP sent successfully to " + user.getEmail()) // Düzəliş edildi
+                .message("OTP sent successfully to " + user.getEmail())
                 .build();
     }
 
@@ -260,7 +259,7 @@ public class BusinessAuthService {
                 .email(user.getEmail())
                 .role(user.getRoles().name())
                 .isAccountEnabled(isAccountEnabled)
-                .message(message) // Düzəliş edildi
+                .message(message)
                 .build();
     }
 
@@ -277,7 +276,7 @@ public class BusinessAuthService {
         businnessUserRepository.save(user);
         log.info("Password for user '{}' reset successfully.", user.getUserName());
 
-        // Şifrə sıfırlandıqdan sonra bütün köhnə refresh tokenlərini silin (təhlükəsizlik üçün)
+        // Şifrə sıfırlandıqdan sonra bütün köhnə refresh tokenlərini sil
         refreshTokenService.deleteByUserId(user.getId());
         log.info("All refresh tokens for user '{}' deleted after password reset.", user.getUserName());
 

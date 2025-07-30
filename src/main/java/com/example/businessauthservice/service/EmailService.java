@@ -17,7 +17,7 @@ public class EmailService {
 
     private final JavaMailSender mailSender;
 
-    @Async("taskExecutor")
+    @Async("taskExecutor") // Bu, xüsusilə email göndərmə kimi zaman alan işlərdə performansı qorumaq üçün kritikdir.
     public void sendEmail(String to, String subject, String body) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
