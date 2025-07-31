@@ -58,7 +58,6 @@ public class BusinessAuthService {
                     throw new UserAlreadyExistsException("Email '" + signupRequest.getEmail() + "' already exists.");
                 });
 
-        // Yeni əlavə olunan məntiq: Front-end-dən gələn rolu təyin etmək
         Roles assignedRole;
         try {
             assignedRole = Roles.valueOf(signupRequest.getSelectedRole().toUpperCase());
@@ -72,19 +71,18 @@ public class BusinessAuthService {
                 .userName(signupRequest.getUserName())
                 .email(signupRequest.getEmail())
                 .password(passwordEncoder.encode(signupRequest.getPassword()))
-                .roles(assignedRole) // Artıq front-end-dən gələn rolu təyin edirik
+                .roles(assignedRole)
                 .enabled(false) // Email təsdiqindən sonra aktiv olunacaq
                 .build();
 
         BusinessUser savedUser = businnessUserRepository.save(newUser);
         log.info("User '{}' with role '{}' registered successfully. Sending account confirmation OTP.", savedUser.getUserName(), savedUser.getRoles().name());
 
-        // Hesab təsdiqi üçün OTP göndərin
         OtpSendRequest otpSendRequest = new OtpSendRequest();
-        otpSendRequest.setIdentifier(savedUser.getEmail()); // OTP-ni emailə göndəririk
+        otpSendRequest.setIdentifier(savedUser.getEmail());
         otpSendRequest.setSendMethod("email");
         otpSendRequest.setOtpType("ACCOUNT_CONFIRMATION");
-        sendOtp(otpSendRequest); // OTP-ni göndərmək üçün metodunuzu çağırın
+        sendOtp(otpSendRequest);
 
         return AuthResponse.builder()
                 .username(savedUser.getUserName())
@@ -113,7 +111,8 @@ public class BusinessAuthService {
                 throw new BadCredentialsException("Account is not enabled. Please confirm your email.");
             }
 
-            String accessToken = jwtService.generateToken(user.getUserName(), user.getRoles());
+            // JwtService.generateToken metodunu user obyekti ilə çağırın
+            String accessToken = jwtService.generateToken(user); // <-- DƏYİŞİKLİK: user obyekti ötürülür
             RefreshToken refreshToken = refreshTokenService.createRefreshToken(user.getUserName());
             log.info("User '{}' logged in successfully.", user.getUserName());
 
@@ -125,6 +124,7 @@ public class BusinessAuthService {
                     .role(user.getRoles().name())
                     .isAccountEnabled(user.isEnabled())
                     .message("Login successful.")
+                    .userId(user.getId()) // <-- DƏYİŞİKLİK: userId AuthResponse-a əlavə edildi
                     .build();
         } catch (UsernameNotFoundException | BadCredentialsException e) {
             log.error("Authentication failed for identifier {}: {}", loginRequest.getIdentifier(), e.getMessage());
@@ -150,17 +150,19 @@ public class BusinessAuthService {
                     return new ResourceNotFoundException("User not found for refresh token.");
                 });
 
-        String newAccessToken = jwtService.generateToken(user.getUserName(), user.getRoles());
+        // Refresh token üçün də generateToken metodunu user obyekti ilə çağırın
+        String newAccessToken = jwtService.generateToken(user); // <-- DƏYİŞİKLİK: user obyekti ötürülür
         log.info("Access token refreshed successfully for user: {}", user.getUserName());
 
         return AuthResponse.builder()
                 .accessToken(newAccessToken)
-                .refreshToken(refreshToken.getToken()) // Refresh token eyni qalır
+                .refreshToken(refreshToken.getToken())
                 .username(user.getUserName())
                 .email(user.getEmail())
                 .role(user.getRoles().name())
                 .isAccountEnabled(user.isEnabled())
                 .message("Access token refreshed successfully.")
+                .userId(user.getId()) // <-- DƏYİŞİKLİK: userId AuthResponse-a əlavə edildi
                 .build();
     }
 
@@ -179,16 +181,15 @@ public class BusinessAuthService {
                 .orElseGet(() -> businnessUserRepository.findByUserName(request.getIdentifier())
                         .orElseThrow(() -> new ResourceNotFoundException("User not found with identifier: " + request.getIdentifier())));
 
-        // Həmin identifier və OTP növü üçün aktiv, istifadə olunmamış OTP-ləri deaktiv edin
         otpRepository.findByIdentifierAndOtpTypeAndUsedFalseAndExpiryDateAfter(user.getEmail(), request.getOtpType(), Instant.now())
                 .ifPresent(activeOtp -> {
-                    activeOtp.setUsed(true); // Köhnə OTP-ni istifadə edilmiş kimi qeyd edir
+                    activeOtp.setUsed(true);
                     otpRepository.save(activeOtp);
                     log.info("Deactivated previous active OTP for identifier: {} and type: {}", request.getIdentifier(), request.getOtpType());
                 });
 
         String otpCode = generateRandomOtp();
-        Instant expiryTime = Instant.now().plus(5, ChronoUnit.MINUTES); // 5 dq etibarlı
+        Instant expiryTime = Instant.now().plus(5, ChronoUnit.MINUTES);
 
         Otp otp = Otp.builder()
                 .identifier(user.getEmail())
@@ -214,6 +215,7 @@ public class BusinessAuthService {
                 .role(user.getRoles().name())
                 .isAccountEnabled(user.isEnabled())
                 .message("OTP sent successfully to " + user.getEmail())
+                .userId(user.getId()) // <-- DƏYİŞİKLİK: userId AuthResponse-a əlavə edildi
                 .build();
     }
 
@@ -225,7 +227,6 @@ public class BusinessAuthService {
                 .orElseGet(() -> businnessUserRepository.findByUserName(request.getIdentifier())
                         .orElseThrow(() -> new ResourceNotFoundException("User not found with identifier: " + request.getIdentifier())));
 
-        // Aktiv, istifadə olunmamış və müddəti keçməmiş OTP-ni tapın
         Otp otp = otpRepository.findByIdentifierAndOtpTypeAndUsedFalseAndExpiryDateAfter(user.getEmail(), request.getOtpType(), Instant.now())
                 .orElseThrow(() -> {
                     log.warn("OTP verification failed: OTP not found, expired, or already used for identifier: {} and type: {}", request.getIdentifier(), request.getOtpType());
@@ -237,17 +238,17 @@ public class BusinessAuthService {
             throw new OtpException("Incorrect OTP code.");
         }
 
-        otp.setUsed(true); // OTP-ni istifadə edilmiş kimi qeyd edin
+        otp.setUsed(true);
         otpRepository.save(otp);
         log.info("OTP successfully verified for identifier: {} and type: {}", request.getIdentifier(), request.getOtpType());
 
         String message = "OTP verified successfully.";
-        Boolean isAccountEnabled = user.isEnabled(); // Başlanğıc vəziyyət
+        Boolean isAccountEnabled = user.isEnabled();
 
         if ("ACCOUNT_CONFIRMATION".equals(request.getOtpType())) {
-            user.setEnabled(true); // Hesabı aktiv edin
+            user.setEnabled(true);
             businnessUserRepository.save(user);
-            isAccountEnabled = true; // Statusu güncəlləyin
+            isAccountEnabled = true;
             log.info("Account for user '{}' enabled successfully.", user.getUserName());
             message = "Account confirmed successfully.";
         } else if ("PASSWORD_RESET".equals(request.getOtpType())) {
@@ -260,6 +261,7 @@ public class BusinessAuthService {
                 .role(user.getRoles().name())
                 .isAccountEnabled(isAccountEnabled)
                 .message(message)
+                .userId(user.getId()) // <-- DƏYİŞİKLİK: userId AuthResponse-a əlavə edildi
                 .build();
     }
 
@@ -271,22 +273,20 @@ public class BusinessAuthService {
                 .orElseGet(() -> businnessUserRepository.findByUserName(request.getIdentifier())
                         .orElseThrow(() -> new ResourceNotFoundException("User not found with identifier: " + request.getIdentifier())));
 
-        // Yeni şifrəni heşləyin
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         businnessUserRepository.save(user);
         log.info("Password for user '{}' reset successfully.", user.getUserName());
 
-        // Şifrə sıfırlandıqdan sonra bütün köhnə refresh tokenlərini sil
         refreshTokenService.deleteByUserId(user.getId());
         log.info("All refresh tokens for user '{}' deleted after password reset.", user.getUserName());
 
-        // İstifadəçi daxil olub yeni token ala bilər
         return AuthResponse.builder()
                 .username(user.getUserName())
                 .email(user.getEmail())
                 .role(user.getRoles().name())
                 .isAccountEnabled(user.isEnabled())
-                .message("Password reset successfully. You can now login with your new password.") // Düzəliş edildi
+                .message("Password reset successfully. You can now login with your new password.")
+                .userId(user.getId()) // <-- DƏYİŞİKLİK: userId AuthResponse-a əlavə edildi
                 .build();
     }
 
@@ -300,12 +300,12 @@ public class BusinessAuthService {
                     return new ResourceNotFoundException("User not found: " + username);
                 });
 
-        // İstifadəçiyə aid bütün refresh tokenlərini silin
         refreshTokenService.deleteByUserId(user.getId());
         log.info("All refresh tokens for user '{}' deleted successfully during logout.", username);
 
         return AuthResponse.builder()
                 .message("User logged out successfully. All active sessions have been terminated.")
+                .userId(user.getId()) // <-- DƏYİŞİKLİK: userId AuthResponse-a əlavə edildi
                 .build();
     }
 
@@ -340,16 +340,13 @@ public class BusinessAuthService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found: " + username));
 
         refreshTokenService.deleteByUserId(user.getId());
-        businnessUserRepository.delete(user); // Silirik useri
+        businnessUserRepository.delete(user);
         log.info("User '{}' deleted account successfully.", username);
     }
 
-
-    // --- Utility Method for OTP generation ---
-
     private String generateRandomOtp() {
         Random random = new Random();
-        int otp = 100000 + random.nextInt(900000); // 6 rəqəmli OTP
+        int otp = 100000 + random.nextInt(900000);
         return String.valueOf(otp);
     }
 }

@@ -1,6 +1,6 @@
 package com.example.businessauthservice.service;
 
-import com.example.businessauthservice.model.enumeration.Roles;
+import com.example.businessauthservice.model.entity.BusinessUser; // BusinessUser import edin
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
@@ -103,15 +103,18 @@ public class JwtService {
 
     /**
      * Yeni bir JWT Access Token yaradır.
+     * Bu metod artıq BusinessUser obyekti qəbul edir.
      *
-     * @param userName Tokenin subject (istifadəçi adı) olacaq string.
-     * @param role İstifadəçinin rolu (Roles enum-undan).
+     * @param user Token yaradılacaq BusinessUser obyekti.
      * @return Yaradılmış JWT Access Token.
      */
-    public String generateToken(String userName, Roles role) {
+    public String generateToken(com.example.businessauthservice.model.entity.BusinessUser user) { // <-- DƏYİŞİKLİK: BusinessUser qəbul edir
         Map<String, Object> claims = new HashMap<>();
-        claims.put("role", role.name()); // Rolu "role" adlı bir claim olaraq tokenə əlavə edin
-        return createToken(claims, userName);
+        claims.put("role", user.getRoles().name()); // Rolu "role" adlı bir claim olaraq tokenə əlavə edin
+        claims.put("userId", user.getId()); // <-- ƏN VACİB DƏYİŞİKLİK: userId claim-ini əlavə edin!
+        claims.put("email", user.getEmail()); // Email-i də əlavə etmək faydalı olar
+
+        return createToken(claims, user.getUserName()); // username-i user obyektindən götürün
     }
 
     /**

@@ -17,4 +17,5 @@ public class AuthResponse {
     private String role;
     private Boolean isAccountEnabled;
     private String message;
+    private Long userId;
 }
