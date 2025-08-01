@@ -108,11 +108,11 @@ public class JwtService {
      * @param user Token yaradılacaq BusinessUser obyekti.
      * @return Yaradılmış JWT Access Token.
      */
-    public String generateToken(com.example.businessauthservice.model.entity.BusinessUser user) { // <-- DƏYİŞİKLİK: BusinessUser qəbul edir
+    public String generateToken(com.example.businessauthservice.model.entity.BusinessUser user) {
         Map<String, Object> claims = new HashMap<>();
-        claims.put("role", user.getRoles().name()); // Rolu "role" adlı bir claim olaraq tokenə əlavə edin
-        claims.put("userId", user.getId()); // <-- ƏN VACİB DƏYİŞİKLİK: userId claim-ini əlavə edin!
-        claims.put("email", user.getEmail()); // Email-i də əlavə etmək faydalı olar
+        claims.put("role", user.getRoles().name());
+        claims.put("userId", user.getId());
+        claims.put("email", user.getEmail());
 
         return createToken(claims, user.getUserName()); // username-i user obyektindən götürün
     }

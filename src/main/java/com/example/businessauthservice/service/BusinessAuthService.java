@@ -40,7 +40,6 @@ public class BusinessAuthService {
     private final OtpRepository otpRepository;
     private final RefreshTokenRepository refreshTokenRepository;
 
-    // --- Authentication and Authorization Flows ---
 
     @Transactional
     public AuthResponse signup(Signup signupRequest) {
@@ -112,7 +111,7 @@ public class BusinessAuthService {
             }
 
             // JwtService.generateToken metodunu user obyekti ilə çağırın
-            String accessToken = jwtService.generateToken(user); // <-- DƏYİŞİKLİK: user obyekti ötürülür
+            String accessToken = jwtService.generateToken(user);
             RefreshToken refreshToken = refreshTokenService.createRefreshToken(user.getUserName());
             log.info("User '{}' logged in successfully.", user.getUserName());
 
@@ -124,7 +123,7 @@ public class BusinessAuthService {
                     .role(user.getRoles().name())
                     .isAccountEnabled(user.isEnabled())
                     .message("Login successful.")
-                    .userId(user.getId()) // <-- DƏYİŞİKLİK: userId AuthResponse-a əlavə edildi
+                    .userId(user.getId())
                     .build();
         } catch (UsernameNotFoundException | BadCredentialsException e) {
             log.error("Authentication failed for identifier {}: {}", loginRequest.getIdentifier(), e.getMessage());
@@ -151,7 +150,7 @@ public class BusinessAuthService {
                 });
 
         // Refresh token üçün də generateToken metodunu user obyekti ilə çağırın
-        String newAccessToken = jwtService.generateToken(user); // <-- DƏYİŞİKLİK: user obyekti ötürülür
+        String newAccessToken = jwtService.generateToken(user);
         log.info("Access token refreshed successfully for user: {}", user.getUserName());
 
         return AuthResponse.builder()
@@ -162,7 +161,7 @@ public class BusinessAuthService {
                 .role(user.getRoles().name())
                 .isAccountEnabled(user.isEnabled())
                 .message("Access token refreshed successfully.")
-                .userId(user.getId()) // <-- DƏYİŞİKLİK: userId AuthResponse-a əlavə edildi
+                .userId(user.getId())
                 .build();
     }
 
@@ -215,7 +214,7 @@ public class BusinessAuthService {
                 .role(user.getRoles().name())
                 .isAccountEnabled(user.isEnabled())
                 .message("OTP sent successfully to " + user.getEmail())
-                .userId(user.getId()) // <-- DƏYİŞİKLİK: userId AuthResponse-a əlavə edildi
+                .userId(user.getId())
                 .build();
     }
 
@@ -261,7 +260,7 @@ public class BusinessAuthService {
                 .role(user.getRoles().name())
                 .isAccountEnabled(isAccountEnabled)
                 .message(message)
-                .userId(user.getId()) // <-- DƏYİŞİKLİK: userId AuthResponse-a əlavə edildi
+                .userId(user.getId())
                 .build();
     }
 
@@ -286,7 +285,7 @@ public class BusinessAuthService {
                 .role(user.getRoles().name())
                 .isAccountEnabled(user.isEnabled())
                 .message("Password reset successfully. You can now login with your new password.")
-                .userId(user.getId()) // <-- DƏYİŞİKLİK: userId AuthResponse-a əlavə edildi
+                .userId(user.getId())
                 .build();
     }
 
@@ -305,7 +304,7 @@ public class BusinessAuthService {
 
         return AuthResponse.builder()
                 .message("User logged out successfully. All active sessions have been terminated.")
-                .userId(user.getId()) // <-- DƏYİŞİKLİK: userId AuthResponse-a əlavə edildi
+                .userId(user.getId())
                 .build();
     }
 
