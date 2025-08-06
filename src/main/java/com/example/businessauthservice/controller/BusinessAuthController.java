@@ -45,12 +45,12 @@ public class BusinessAuthController {
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
 
-//    @PostMapping("/send-otp")
-//    public ResponseEntity<AuthResponse> sendOtp(@Valid @RequestBody OtpSendRequest request) {
-//        log.info("Send OTP request received for identifier: {} with type: {}", request.getIdentifier(), request.getOtpType());
-//        AuthResponse response = authService.sendOtp(request);
-//        return new ResponseEntity<>(response, HttpStatus.OK);
-//    }
+    @PostMapping("/send-otp")
+    public ResponseEntity<AuthResponse> sendOtp(@Valid @RequestBody OtpSendRequest request) {
+        log.info("Send OTP request received for identifier: {} with type: {}", request.getIdentifier(), request.getOtpType());
+        AuthResponse response = authService.sendOtp(request);
+        return new ResponseEntity<>(response, HttpStatus.OK);
+    }
 
     @PostMapping("/verify-otp")
     public ResponseEntity<AuthResponse> verifyOtp(@Valid @RequestBody OtpVerificationRequest request) {
